@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Manage Watchlist{% endblock %}
+{% block content %}
+<h1>Manage Watchlist</h1>
+<p class="sub">Add, edit, or remove wanted individuals. The system automatically enrolls new photos in the background.</p>
+
+{% if saved %}
+<div class="card" style="border-color: var(--success); background: var(--success-bg);">
+    ✅ Saved successfully! The system has been updated.
+</div>
+{% endif %}
+
+{% if error %}
+<div class="card" style="border-color: var(--danger); background: #ffeeee; color: var(--danger);">
+    ⚠️ {{ error }}
+</div>
+{% endif %}
+
+<div class="card">
+    <table>
+        <tr><th>Photo</th><th>Name</th><th>Case #</th><th>Crime</th><th>Danger Level</th><th></th></tr>
+        {% for row in records %}
+        <tr>
+            <form method="post">
+                <input type="hidden" name="action" value="update">
+                <input type="hidden" name="original_name" value="{{ row.name }}">
+                <td>
+                    <div class="table-thumb">
+                        {% if row.photo_url %}<img src="{{ row.photo_url }}">{% else %}{{ row.name[0]|upper }}{% endif %}
+                    </div>
+                </td>
+                <td><input type="text" name="name" value="{{ row.name }}" style="margin-bottom:0;"></td>
+                <td><input type="text" name="case_number" value="{{ row.case_number }}" style="margin-bottom:0;"></td>
+                <td><input type="text" name="crime" value="{{ row.crime }}" style="margin-bottom:0;"></td>
+                <td>
+                    <select name="danger_level" style="margin-bottom:0;">
+                        <option value="HIGH" {% if row.danger_level == "HIGH" %}selected{% endif %}>HIGH</option>
+                        <option value="MEDIUM" {% if row.danger_level == "MEDIUM" %}selected{% endif %}>MEDIUM</option>
+                        <option value="LOW" {% if row.danger_level == "LOW" %}selected{% endif %}>LOW</option>
+                    </select>
+                </td>
+                <td class="actions">
+                    <button type="submit" class="small">Save</button>
+            </form>
+            <form method="post" style="display:inline;" onsubmit="return confirm('Delete this record entirely?');">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="original_name" value="{{ row.name }}">
+                    <button type="submit" class="small danger-btn">Delete</button>
+                </td>
+            </form>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="sub">No records yet - add one below.</td></tr>
+        {% endfor %}
+    </table>
+</div>
+
+<h2>Add a new suspect</h2>
+<div class="card">
+    <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="add">
+        <div class="grid">
+            <div>
+                <label>Name</label>
+                <input type="text" name="name" required placeholder="e.g. John Doe">
+            </div>
+            <div>
+                <label>Photos (Select 1 or more)</label>
+                <input type="file" name="photos" multiple accept="image/*">
+            </div>
+            <div>
+                <label>Case number</label>
+                <input type="text" name="case_number" placeholder="e.g. 2024-0113">
+            </div>
+            <div>
+                <label>Crime</label>
+                <input type="text" name="crime" placeholder="e.g. Armed Robbery">
+            </div>
+            <div>
+                <label>Danger level</label>
+                <select name="danger_level">
+                    <option value="HIGH">HIGH</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="LOW">LOW</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit">Add to Watchlist</button>
+    </form>
+</div>
+{% endblock %}

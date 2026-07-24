@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+{% block content %}
+<h1>Alerts</h1>
+<p class="sub">Every match ever detected, grouped by person.</p>
+
+{% if not people %}
+<p class="sub">No alerts yet - run the live camera or scan a photo first.</p>
+{% endif %}
+
+{% for person in people %}
+<div class="card">
+    <h2>{{ person.name }}</h2>
+    <table>
+        <tr><th>Time</th><th>Confidence</th><th>Case #</th><th>Crime</th><th>Danger</th><th>Snapshot</th></tr>
+        {% for row in person.rows %}
+        <tr>
+            <td>{{ row.timestamp }}</td>
+            <td>{{ row.similarity }}</td>
+            <td>{{ row.case_number }}</td>
+            <td>{{ row.crime }}</td>
+            <td>
+                {% if row.danger_level == "HIGH" %}<span class="badge high">HIGH</span>
+                {% elif row.danger_level == "LOW" %}<span class="badge low">LOW</span>
+                {% else %}<span class="badge na">{{ row.danger_level }}</span>{% endif %}
+            </td>
+            <td><a href="{{ url_for('media', filepath=row.snapshot_path) }}" target="_blank">view</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endfor %}
+{% endblock %}

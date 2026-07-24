@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Face Watchlist{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+    <div class="app-shell">
+        <div class="sidebar">
+            <div class="brand">🔎 Watchlist System</div>
+            <nav>
+                <a href="{{ url_for('dashboard') }}" class="{{ 'active' if active=='dashboard' else '' }}">🏠 Dashboard</a>
+                <a href="{{ url_for('camera_page') }}" class="{{ 'active' if active=='camera' else '' }}">📷 Live Camera</a>
+                <a href="{{ url_for('watchlist_page') }}" class="{{ 'active' if active=='watchlist' else '' }}">📋 Manage Watchlist</a>
+                <a href="{{ url_for('search_page') }}" class="{{ 'active' if active=='search' else '' }}">🔍 Search Photo</a>
+                <a href="{{ url_for('alerts_page') }}" class="{{ 'active' if active=='alerts' else '' }}">🚨 Alert History</a>
+                <a href="{{ url_for('settings_page') }}" class="{{ 'active' if active=='settings' else '' }}">⚙️ Settings</a>
+            </nav>
+        </div>
+        <div class="main">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Live Camera{% endblock %}
+{% block content %}
+<h1>Live Camera</h1>
+<div style="display: flex; gap: 20px; align-items: center; margin-bottom: 20px; font-size: 0.95em;">
+    <div style="display: flex; align-items: center; gap: 8px; background: #fff; padding: 6px 12px; border-radius: 20px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+        <div style="width: 14px; height: 14px; border: 2px solid #ef4444; border-radius: 3px; background: rgba(239,68,68,0.2);"></div>
+        <span style="color: #475569; font-weight: 500;">Watchlist Match</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; background: #fff; padding: 6px 12px; border-radius: 20px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+        <div style="width: 14px; height: 14px; border: 2px solid #22c55e; border-radius: 3px; background: rgba(34,197,94,0.2);"></div>
+        <span style="color: #475569; font-weight: 500;">Unrecognized</span>
+    </div>
+</div>
+<div class="card" id="camera-app">
+    <div id="statusChip" class="chip"><span class="dot off" id="statusDot"
+            :class="{on: isRunning, off: !isRunning}"></span> <span id="statusText"
+            v-text="isRunning ? 'Camera running' : 'Camera stopped'"></span></div>
+
+    <div style="display: flex; gap: 20px; margin-top: 14px; flex-wrap: wrap;">
+        <!-- Camera Area -->
+        <div class="camera-box" id="cameraBox" style="flex: 2; min-width: 400px; margin-top: 0;">
+            <div v-if="!isRunning" class="camera-placeholder" id="placeholder">
+                <div class="icon">📷</div>
+                <div>Camera is not running</div>
+            </div>
+            <img v-else :src="'{{ url_for('video_feed') }}?t=' + timestamp" style="max-width: 100%; border-radius: 8px;">
+        </div>
+
+        <!-- Alert Info Side Panel -->
+        <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column;">
+            <div v-if="alert" class="alert-box"
+                style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 10px 25px -5px rgba(239, 68, 68, 0.15), 0 8px 10px -6px rgba(239, 68, 68, 0.1); border-top: 4px solid #ef4444; animation: fadeIn 0.4s ease-out;">
+                
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                    <div style="background: #fee2e2; color: #ef4444; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2em;">🚨</div>
+                    <h3 style="color: #b91c1c; margin: 0; font-size: 1.25em; letter-spacing: 0.5px;">MATCH DETECTED</h3>
+                </div>
+
+                <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 24px;">
+                    <img v-if="alert.photo_url" :src="alert.photo_url"
+                        style="width: 140px; height: 140px; object-fit: cover; border-radius: 50%; border: 4px solid #fee2e2; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                    <div style="margin-top: 16px; text-align: center;">
+                        <div style="font-size: 1.4em; font-weight: 700; color: #0f172a; text-transform: capitalize;" v-text="alert.name"></div>
+                        <div style="color: #64748b; font-size: 0.9em; margin-top: 4px;">Confidence: <span style="color: #ef4444; font-weight: 600;" v-text="(alert.similarity * 100).toFixed(1) + '%'"></span></div>
+                    </div>
+                </div>
+
+                <div style="background: #f8fafc; border-radius: 8px; padding: 16px; border: 1px solid #e2e8f0;">
+                    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px; font-size: 0.95em;">
+                        <div style="color: #64748b; font-weight: 600; text-transform: uppercase; font-size: 0.85em;">Case #</div>
+                        <div style="color: #1e293b; font-weight: 500;" v-text="alert.case_number"></div>
+                        
+                        <div style="color: #64748b; font-weight: 600; text-transform: uppercase; font-size: 0.85em;">Crime</div>
+                        <div style="color: #1e293b; font-weight: 500;" v-text="alert.crime"></div>
+                        
+                        <div style="color: #64748b; font-weight: 600; text-transform: uppercase; font-size: 0.85em; display: flex; align-items: center;">Danger</div>
+                        <div><span style="font-size: 0.8em; font-weight: 700; color: #b91c1c; padding: 4px 8px; background: #fee2e2; border-radius: 6px; letter-spacing: 0.5px;" v-text="alert.danger_level"></span></div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 16px; text-align: center; color: #94a3b8; font-size: 0.85em;">
+                    Spotted at <span v-text="alert.timestamp"></span>
+                </div>
+            </div>
+            
+            <div v-else-if="isRunning" style="border: 2px dashed #cbd5e1; border-radius: 12px; background: #f8fafc; padding: 30px; text-align: center; color: #64748b; display: flex; flex-direction: column; justify-content: center; align-items: center; flex: 1;">
+                <div style="font-size: 2.5em; margin-bottom: 16px; opacity: 0.5;">🛡️</div>
+                <div style="font-weight: 500; font-size: 1.1em; color: #475569;">System Active</div>
+                <div style="font-size: 0.9em; margin-top: 8px;">Monitoring feed for suspects...</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top:14px;">
+        <button id="startBtn" @click="startCamera" v-show="!isRunning">▶ Start Monitoring</button>
+        <button id="stopBtn" class="secondary" @click="stopCamera" v-show="isRunning">■ Stop Monitoring</button>
+    </div>
+</div>
+
+<style>
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+<script>
+    const { createApp, ref, onUnmounted } = Vue;
+
+    createApp({
+        setup() {
+            const isRunning = ref(false);
+            const alert = ref(null);
+            const timestamp = ref(Date.now());
+            let pollInterval = null;
+
+            const pollAlert = async () => {
+                if (!isRunning.value) return;
+                try {
+                    const res = await fetch('/api/latest_alert');
+                    const data = await res.json();
+                    // Update alert value. If null, it clears the panel.
+                    alert.value = data.alert || null;
+                } catch (e) {
+                    console.error("Failed to fetch alert", e);
+                }
+            };
+
+            const startCamera = async () => {
+                try {
+                    await fetch('/api/start_camera', { method: 'POST' });
+                    timestamp.value = Date.now();
+                    isRunning.value = true;
+                    pollInterval = setInterval(pollAlert, 1000);
+                } catch (e) {
+                    console.error("Failed to start camera API", e);
+                }
+            };
+
+            const stopCamera = async () => {
+                try {
+                    await fetch('/api/stop_camera', { method: 'POST' });
+                    isRunning.value = false;
+                    alert.value = null;  // Clear the alert panel when stopped
+                    if (pollInterval) {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                    }
+                } catch (e) {
+                    console.error("Failed to stop camera API", e);
+                }
+            };
+
+            onUnmounted(() => {
+                if (pollInterval) clearInterval(pollInterval);
+            });
+
+            return { isRunning, startCamera, stopCamera, alert, timestamp };
+        }
+    }).mount('#camera-app');
+</script>
+{% endblock %}

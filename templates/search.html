@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Search Photo{% endblock %}
+{% block content %}
+<h1>Search Photo</h1>
+<p class="sub">Upload a photo to find faces. Choose whether to scan for wanted criminals, or identify unknown individuals from the village database.</p>
+
+<div class="card">
+    <form method="post" enctype="multipart/form-data">
+        <div class="grid">
+            <div>
+                <label>Choose a photo</label>
+                <input type="file" name="photo" accept=".jpg,.jpeg,.png" required onchange="previewImage(event)">
+                <img id="imagePreview" src="#" alt="Image Preview" style="display: none; max-width: 100%; max-height: 300px; margin-top: 15px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+            </div>
+            <div>
+                <label>Search Type</label>
+                <select name="search_type">
+                    <option value="watchlist" {% if search_type == 'watchlist' %}selected{% endif %}>Scan against Wanted Watchlist</option>
+                    <option value="village" {% if search_type == 'village' %}selected{% endif %}>Identify against Village Population</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" style="margin-top: 10px;">🔍 Run Search</button>
+    </form>
+</div>
+
+{% if ran %}
+    {% if search_type == 'watchlist' %}
+        <!-- Watchlist Results -->
+        {% if matches %}
+        <div class="result-banner warning" style="background: var(--danger-bg); border-color: rgba(239,68,68,0.3);">
+            <div class="big-icon">🚨</div>
+            <div>
+                <div class="title">{{ matches|length }} wanted {{ 'person' if matches|length == 1 else 'people' }} found</div>
+                <div class="subtitle">{{ total_faces }} face(s) checked in total &middot; {{ unknown_count }} unrecognized</div>
+            </div>
+        </div>
+
+        {% for m in matches %}
+        <div class="person-card">
+            <div class="avatar match">
+                {% if m.photo_url %}<img src="{{ m.photo_url }}">{% else %}{{ m.name[0]|upper }}{% endif %}
+            </div>
+            <div>
+                <div class="name">{{ m.name|title }}</div>
+                <div class="detail">{{ m.crime }} &middot; Danger: {{ m.danger_level }}</div>
+            </div>
+            <div class="conf">{{ (m.confidence * 100)|round|int }}% match</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="result-banner success">
+            <div class="big-icon">✅</div>
+            <div>
+                <div class="title">No wanted people found</div>
+                <div class="subtitle">{{ total_faces }} face(s) checked, none matched the watchlist.</div>
+            </div>
+        </div>
+        {% endif %}
+
+    {% elif search_type == 'village' %}
+        <!-- Village Identification Results -->
+        {% if best_match %}
+        <div class="result-banner warning" style="background: var(--warning-bg); border-color: var(--warning);">
+            <div class="big-icon">👤</div>
+            <div>
+                <div class="title">Suspect Identified: {{ best_match.name|title }}</div>
+                <div class="subtitle">Confidence: {{ (best_match.score * 100)|round|int }}% match</div>
+            </div>
+        </div>
+        {% else %}
+        <div class="result-banner success">
+            <div class="big-icon">❓</div>
+            <div>
+                <div class="title">No confident match found</div>
+                <div class="subtitle">Treat as unidentified.</div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if ranked %}
+        <h3>Closest Matches</h3>
+        {% for r in ranked[:3] %}
+        <div class="person-card">
+            <div class="avatar">
+                {% if r.photo_url %}<img src="{{ r.photo_url }}">{% else %}{{ r.name[0]|upper }}{% endif %}
+            </div>
+            <div>
+                <div class="name">{{ r.name|title }}</div>
+                <div class="detail">Rank #{{ loop.index }}</div>
+            </div>
+            <div class="conf">{{ (r.score * 100)|round|int }}% similarity</div>
+        </div>
+        {% endfor %}
+        {% endif %}
+    {% endif %}
+
+{% if result_image %}
+    <h2>Photo with results marked</h2>
+    <img class="preview" src="{{ url_for('media', filepath=result_image) }}">
+    {% endif %}
+{% endif %}
+
+<script>
+    function previewImage(event) {
+        var reader = new FileReader();
+        reader.onload = function(){
+            var output = document.getElementById('imagePreview');
+            output.src = reader.result;
+            output.style.display = 'block';
+        };
+        if(event.target.files[0]) {
+            reader.readAsDataURL(event.target.files[0]);
+        }
+    }
+</script>
+{% endblock %}

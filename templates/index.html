@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<div class="welcome-hero">
+    <h1>👋 Welcome</h1>
+    <p>This system watches for wanted people and alerts you the moment one is spotted.</p>
+</div>
+
+<div class="stat-row" style="margin-top:18px;">
+    <div class="stat-box">
+        <div class="num">{{ watchlist_count }}</div>
+        <div class="label">People being watched for</div>
+    </div>
+    <div class="stat-box">
+        <div class="num">{{ total_alerts }}</div>
+        <div class="label">Times someone was spotted</div>
+    </div>
+    <div class="stat-box">
+        <div class="num">{{ high_danger_count }}</div>
+        <div class="label">High-danger spottings</div>
+    </div>
+</div>
+
+<h2>What would you like to do?</h2>
+<div class="grid">
+    <div class="card">
+        <h2 style="margin-top:0;">📷 Watch the Camera</h2>
+        <p class="sub">See a live feed and get alerted the moment a wanted person appears.</p>
+        <a class="button" href="{{ url_for('camera_page') }}">Open Live Camera</a>
+    </div>
+    <div class="card">
+        <h2 style="margin-top:0;">➕ Manage Watchlist</h2>
+        <p class="sub">Add new suspects or view everyone currently being watched for.</p>
+        <a class="button secondary" href="{{ url_for('watchlist_page') }}">Manage Watchlist</a>
+    </div>
+    <div class="card">
+        <h2 style="margin-top:0;">🖼️ Search Photo</h2>
+        <p class="sub">Upload a photo to scan for wanted criminals or identify an unknown suspect.</p>
+        <a class="button secondary" href="{{ url_for('search_page') }}">Search a Photo</a>
+    </div>
+    <div class="card">
+        <h2 style="margin-top:0;">🚨 Review Alerts</h2>
+        <p class="sub">See recent times wanted people were spotted by the live camera.</p>
+        <a class="button secondary" href="{{ url_for('alerts_page') }}">View Alerts</a>
+    </div>
+    <div class="card">
+        <h2 style="margin-top:0;">📊 View Analytics</h2>
+        <p class="sub">Trends, most-detected people, and recent activity.</p>
+        <a class="button secondary" href="{{ url_for('analytics_page') }}">View Analytics</a>
+    </div>
+</div>
+{% endblock %}

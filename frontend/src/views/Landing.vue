@@ -1,0 +1,96 @@
+<template>
+    <div class="scan-line"></div>
+    <div class="ambient-glow"></div>
+
+    <nav>
+        <div class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
+                <path d="M12 2a10 10 0 1 0 10 10H12V2z"></path>
+                <path d="M12 12 2.1 12"></path>
+                <path d="M12 12 21.9 12"></path>
+                <path d="M12 12 12 21.9"></path>
+                <circle cx="12" cy="12" r="4"></circle>
+            </svg>
+            Crime Detection System
+        </div>
+        <router-link to="/dashboard" class="btn-enter">Enter System</router-link>
+    </nav>
+
+    <main class="hero">
+        <Transition name="fade-up" appear>
+            <div v-show="mounted" style="transition-delay: 100ms;">
+                <div class="badge">Advanced AI Face Watchlist</div>
+            </div>
+        </Transition>
+
+        <Transition name="fade-up" appear>
+            <h1 v-show="mounted" style="transition-delay: 200ms;">
+                Next-Generation <br>
+                <span class="highlight">Threat Detection</span>
+            </h1>
+        </Transition>
+
+        <Transition name="fade-up" appear>
+            <p class="subtitle" v-show="mounted" style="transition-delay: 300ms;">
+                Instantly identify suspects, secure your village, and monitor live feeds with state-of-the-art AI facial recognition technology.
+            </p>
+        </Transition>
+
+        <Transition name="fade-up" appear>
+            <div v-show="mounted" style="transition-delay: 400ms;">
+                <router-link to="/dashboard" class="cta-button">Launch Dashboard</router-link>
+            </div>
+        </Transition>
+    </main>
+</template>
+
+<script setup>
+import { ref, onMounted } from 'vue'
+
+const mounted = ref(false)
+onMounted(() => {
+    setTimeout(() => { mounted.value = true }, 100)
+})
+</script>
+
+<style scoped>
+:root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --bg: #0f172a;
+    --text-light: #f8fafc;
+    --text-muted: #94a3b8;
+}
+
+body {
+    margin: 0; padding: 0; font-family: 'Inter', sans-serif;
+    background-color: var(--bg); color: var(--text-light);
+    overflow-x: hidden; min-height: 100vh; display: flex; flex-direction: column;
+}
+
+.ambient-glow {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 800px; height: 800px; background: radial-gradient(circle, rgba(37,99,235,0.15) 0%, rgba(15,23,42,0) 70%);
+    z-index: -1; pointer-events: none;
+}
+nav { padding: 24px 48px; display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+.logo { font-weight: 800; font-size: 1.5rem; letter-spacing: -0.5px; display: flex; align-items: center; gap: 12px; }
+.logo span { color: var(--primary); }
+.btn-enter {
+    background: rgba(37, 99, 235, 0.1); color: var(--primary); border: 1px solid rgba(37, 99, 235, 0.3);
+    padding: 10px 24px; border-radius: 99px; text-decoration: none; font-weight: 600;
+    transition: all 0.3s ease; backdrop-filter: blur(10px);
+}
+.btn-enter:hover { background: var(--primary); color: white; box-shadow: 0 0 20px rgba(37, 99, 235, 0.4); transform: translateY(-2px); }
+.hero { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 0 24px; z-index: 10; margin-top: 100px; }
+.badge { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 99px; font-size: 0.9rem; color: var(--text-muted); margin-bottom: 24px; backdrop-filter: blur(10px); }
+h1 { font-size: 4.5rem; font-weight: 800; line-height: 1.1; margin: 0 0 24px 0; letter-spacing: -2px; max-width: 800px; }
+h1 .highlight { background: linear-gradient(135deg, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.subtitle { font-size: 1.25rem; color: var(--text-muted); max-width: 600px; line-height: 1.6; margin-bottom: 48px; font-weight: 300; }
+.cta-button { display: inline-block; background: var(--primary); color: white; text-decoration: none; padding: 16px 48px; border-radius: 99px; font-size: 1.1rem; font-weight: 600; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden; }
+.cta-button:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 10px 30px rgba(37, 99, 235, 0.4); background: var(--primary-dark); }
+.fade-up-enter-active, .fade-up-leave-active { transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+.fade-up-enter-from, .fade-up-leave-to { opacity: 0; transform: translateY(30px); }
+.scan-line { position: fixed; top: 0; left: 0; width: 100%; height: 2px; background: rgba(37, 99, 235, 0.3); box-shadow: 0 0 20px rgba(37, 99, 235, 0.5); animation: scan 8s infinite linear; z-index: -1; opacity: 0.5; }
+@keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
+</style>

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Identify Someone{% endblock %}
+{% block content %}
+<h1>Identify Someone</h1>
+<p class="sub">Upload a photo of an unknown person to find out who they most likely are.</p>
+
+<div class="card">
+    <form method="post" enctype="multipart/form-data">
+        <label>Choose the photo</label>
+        <input type="file" name="photo" accept=".jpg,.jpeg,.png" required>
+        <button type="submit">🕵️ Identify This Person</button>
+    </form>
+</div>
+
+{% if ran %}
+    {% if best_match %}
+    <div class="result-banner success">
+        {% if best_match.photo_url %}
+        <img src="{{ best_match.photo_url }}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;">
+        {% else %}
+        <div class="big-icon">✅</div>
+        {% endif %}
+        <div>
+            <div class="title">Most likely: {{ best_match.name|title }}</div>
+            <div class="subtitle">{{ (best_match.score * 100)|round|int }}% confidence match</div>
+        </div>
+    </div>
+    {% else %}
+    <div class="result-banner warning">
+        <div class="big-icon">❓</div>
+        <div>
+            <div class="title">No confident match found</div>
+            <div class="subtitle">This person doesn't clearly match anyone in the records.</div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if ranked %}
+    <h2>Other possible matches</h2>
+    {% for r in ranked[1:6] %}
+    <div class="person-card">
+        <div class="avatar">
+            {% if r.photo_url %}<img src="{{ r.photo_url }}">{% else %}{{ r.name[0]|upper }}{% endif %}
+        </div>
+        <div class="name">{{ r.name|title }}</div>
+        <div class="conf">{{ (r.score * 100)|round|int }}%</div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if result_image %}
+    <h2>Photo used</h2>
+    <img class="preview" src="{{ url_for('media', filepath=result_image) }}" width="360">
+    {% endif %}
+
+    <details class="tech-details">
+        <summary>Show technical details</summary>
+        <pre class="log">{{ log }}</pre>
+    </details>
+{% endif %}
+{% endblock %}
