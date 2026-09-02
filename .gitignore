@@ -1,0 +1,8 @@
+﻿__pycache__/
+*.pyc
+*.sqlite
+*.faiss
+backend/alerts/
+backend/uploads/
+backend/identification_results/
+alerts/
