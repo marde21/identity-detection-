@@ -16,6 +16,7 @@ import datetime
 import time
 from flask import Flask, request, Response, send_from_directory, jsonify
 from flask_cors import CORS
+from flask_socketio import SocketIO
 from insightface.app import FaceAnalysis
 
 # Ensure CWD is backend/ so config and data files are found
@@ -23,18 +24,20 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
-from main import load_watchlist, trigger_alert
-from enroll import enroll_faces
+from main import trigger_alert
+from db_helpers import search_face, add_person, update_person, delete_person_by_name
+from database import get_db
+from camera_manager import CameraManager
 from scan_photo import scan_faces
 from identify_suspect import identify_faces
 
 PYTHON = sys.executable
 UPLOADS_DIR = "uploads"
-RECORDS_PATH = "criminal_records.csv"
 
 # Serve frontend/dist as static root
 app = Flask(__name__, static_folder="../frontend/dist", static_url_path="/")
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
@@ -42,6 +45,8 @@ print("Loading face analysis model for the web app (this can take a moment)...")
 FACE_APP = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
 FACE_APP.prepare(ctx_id=0, det_size=config.DET_SIZE)
 print("Model loaded. API ready.")
+
+camera_manager = CameraManager(FACE_APP, socketio)
 
 latest_detected_alert = None
 is_camera_active = False
@@ -66,20 +71,6 @@ def read_all_alert_rows():
                 rows.append(row)
     return rows
 
-def read_records():
-    if not os.path.exists(RECORDS_PATH):
-        return []
-    with open(RECORDS_PATH, newline="") as f:
-        reader = csv.DictReader(f)
-        return [dict(row) for row in reader]
-
-def write_records(records):
-    with open(RECORDS_PATH, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["name", "case_number", "crime", "danger_level"])
-        writer.writeheader()
-        for r in records:
-            writer.writerow(r)
-
 def sanitize_folder_name(name):
     name = name.strip()
     return re.sub(r'[\\/:*?"<>|]', '', name)
@@ -103,18 +94,37 @@ def get_person_photo_url(name):
         return f"/media/{path}"
     return None
 
+def extract_embedding_from_image(image_path):
+    img = cv2.imread(image_path)
+    if img is None:
+        return None
+    faces = FACE_APP.get(img)
+    if not faces:
+        return None
+    # Get largest face
+    faces = sorted(faces, key=lambda x: (x.bbox[2]-x.bbox[0])*(x.bbox[3]-x.bbox[1]), reverse=True)
+    return faces[0].normed_embedding
+
 # ---------------- API Endpoints ----------------
 
 @app.route("/api/dashboard", methods=["GET"])
 def api_dashboard():
-    count = 0
-    if os.path.exists(config.DB_PATH):
-        names, _, _ = load_watchlist()
-        count = len(names)
-
-    all_rows = read_all_alert_rows()
-    total_alerts = len(all_rows)
-    high_danger_count = sum(1 for r in all_rows if r.get("danger_level") == "HIGH")
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM watchlist")
+    count = c.fetchone()[0]
+    
+    c.execute("SELECT COUNT(*) FROM alert_logs")
+    total_alerts = c.fetchone()[0]
+    
+    c.execute('''
+        SELECT COUNT(*) FROM alert_logs a
+        JOIN watchlist w ON a.watchlist_id = w.id
+        WHERE w.danger_level = "HIGH"
+    ''')
+    high_danger_count = c.fetchone()[0]
+    
+    conn.close()
 
     return jsonify({
         "watchlist_count": count,
@@ -127,91 +137,55 @@ def api_latest_alert():
     global latest_detected_alert
     return jsonify({"alert": latest_detected_alert})
 
-@app.route("/api/start_camera", methods=["POST"])
-def api_start_camera():
-    global is_camera_active
-    is_camera_active = True
-    return jsonify({"status": "started"})
+@app.route("/api/cameras", methods=["GET", "POST"])
+def api_cameras():
+    if request.method == "GET":
+        return jsonify(camera_manager.get_all_camera_ids())
+        
+    action = request.form.get("action")
+    if action == "add":
+        name = request.form.get("name")
+        source = request.form.get("source")
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("INSERT INTO cameras (name, source) VALUES (?, ?)", (name, source))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success"})
+    elif action == "delete":
+        camera_id = request.form.get("camera_id")
+        camera_manager.stop_client(int(camera_id))
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("DELETE FROM cameras WHERE id=?", (camera_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success"})
+        
+    return jsonify({"error": "invalid action"}), 400
 
-@app.route("/api/stop_camera", methods=["POST"])
-def api_stop_camera():
-    global is_camera_active
-    is_camera_active = False
-    return jsonify({"status": "stopped"})
-
-def gen_camera_frames():
-    global is_camera_active
-    names, embeddings, metadata = load_watchlist()
-    cap = cv2.VideoCapture(config.CAMERA_INDEX)
-    last_alert_time = {}
-    last_criminal_seen = 0
-    try:
-        while True:
-            if not is_camera_active:
-                break
-                
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            faces = FACE_APP.get(frame)
-            criminal_detected_this_frame = False
+@app.route("/video_feed/<int:camera_id>")
+def video_feed(camera_id):
+    def generate():
+        started = camera_manager.start_client(camera_id)
+        if not started:
+            return
+        try:
+            while camera_manager.is_running(camera_id):
+                frame_bytes = camera_manager.get_frame(camera_id)
+                if frame_bytes:
+                    yield (b"--frame\r\n"
+                           b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
+                time.sleep(0.05)
+        finally:
+            camera_manager.stop_client(camera_id)
             
-            for face in faces:
-                embedding = face.normed_embedding
-                box = face.bbox.astype(int)
+    return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
-                if len(names) > 0:
-                    similarities = embeddings @ embedding
-                    best_idx = int(np.argmax(similarities))
-                    best_score = similarities[best_idx]
-                else:
-                    best_score, best_idx = 0.0, None
-
-                if best_idx is not None and best_score >= config.SIMILARITY_THRESHOLD:
-                    criminal_detected_this_frame = True
-                    matched_name = names[best_idx]
-                    color = (0, 0, 255)
-                    label = f"{matched_name} ({best_score:.2f})"
-                    
-                    global latest_detected_alert
-                    case_info = metadata.get(matched_name, {})
-                    latest_detected_alert = {
-                        "name": matched_name,
-                        "similarity": float(best_score),
-                        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "case_number": case_info.get("case_number", "N/A"),
-                        "crime": case_info.get("crime", "N/A"),
-                        "danger_level": case_info.get("danger_level", "N/A"),
-                        "photo_url": get_person_photo_url(matched_name)
-                    }
-                    
-                    trigger_alert(matched_name, best_score, frame, box, last_alert_time, case_info)
-                else:
-                    color = (0, 200, 0)
-                    label = "unknown"
-
-                cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color, 2)
-                cv2.putText(frame, label, (box[0], box[1] - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
-
-            if criminal_detected_this_frame:
-                last_criminal_seen = time.time()
-            elif time.time() - last_criminal_seen > 2.0:
-                latest_detected_alert = None
-
-            ok, buffer = cv2.imencode(".jpg", frame)
-            if not ok:
-                continue
-            frame_bytes = buffer.tobytes()
-            yield (b"--frame\r\n"
-                   b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
-    finally:
-        cap.release()
-
-@app.route("/video_feed")
-def video_feed():
-    return Response(gen_camera_frames(), mimetype="multipart/x-mixed-replace; boundary=frame")
+@app.route("/api/monitoring/stop", methods=["POST"])
+def api_monitoring_stop():
+    camera_manager.force_stop_all()
+    return jsonify({"status": "success"})
 
 @app.route("/api/search", methods=["POST"])
 def api_search():
@@ -294,16 +268,48 @@ def api_analytics():
         "recent_alerts": recent_alerts
     })
 
+@app.route("/api/alert_history", methods=["GET"])
+def api_alert_history():
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''
+        SELECT a.id, a.timestamp, a.confidence, a.photo_path,
+               w.name as person_name, w.case_number, w.crime, w.danger_level,
+               c.name as camera_name
+        FROM alert_logs a
+        JOIN watchlist w ON a.watchlist_id = w.id
+        LEFT JOIN cameras c ON a.camera_id = c.id
+        ORDER BY a.timestamp DESC
+        LIMIT 100
+    ''')
+    rows = c.fetchall()
+    conn.close()
+    
+    history = []
+    for r in rows:
+        d = dict(r)
+        if d.get("photo_path"):
+            d["photo_url"] = "/media/" + d["photo_path"].replace("\\", "/")
+        else:
+            d["photo_url"] = None
+        history.append(d)
+        
+    return jsonify({"history": history})
+
 @app.route("/api/watchlist", methods=["GET", "POST"])
 def api_watchlist():
     if request.method == "GET":
-        records = read_records()
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT * FROM watchlist")
+        rows = c.fetchall()
+        conn.close()
+        records = [dict(r) for r in rows]
         for r in records:
             r["photo_url"] = get_person_photo_url(r["name"])
         return jsonify({"records": records})
         
     action = request.form.get("action")
-    records = read_records()
 
     if action == "add":
         name = request.form.get("name", "").strip()
@@ -316,28 +322,29 @@ def api_watchlist():
             return jsonify({"error": "Name is required."}), 400
             
         folder_name = sanitize_folder_name(name)
+        person_dir = os.path.join(config.WANTED_PHOTOS_DIR, folder_name)
+        os.makedirs(person_dir, exist_ok=True)
+        
+        photo_path = None
         if files and any(f.filename for f in files):
-            person_dir = os.path.join(config.WANTED_PHOTOS_DIR, folder_name)
-            os.makedirs(person_dir, exist_ok=True)
             for f in files:
                 if f and f.filename:
-                    f.save(os.path.join(person_dir, f.filename))
-        
-        found = False
-        for r in records:
-            if r["name"].strip().lower() == folder_name.lower():
-                r["case_number"] = case_number
-                r["crime"] = crime
-                r["danger_level"] = danger_level
-                found = True
-        if not found:
-            records.append({
-                "name": folder_name, "case_number": case_number,
-                "crime": crime, "danger_level": danger_level
-            })
-        
-        write_records(records)
-        enroll_faces(FACE_APP)
+                    save_path = os.path.join(person_dir, f.filename)
+                    f.save(save_path)
+                    photo_path = save_path
+                    
+        if not photo_path:
+            return jsonify({"error": "Photo is required for adding a person."}), 400
+            
+        embedding = extract_embedding_from_image(photo_path)
+        if embedding is None:
+            return jsonify({"error": "No face found in uploaded photo."}), 400
+            
+        try:
+            add_person(folder_name, case_number, crime, danger_level, embedding)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+            
         return jsonify({"status": "success"})
 
     elif action == "update":
@@ -358,20 +365,17 @@ def api_watchlist():
                     if os.path.exists(old_file):
                         os.rename(old_file, new_file)
 
-        for r in records:
-            if r["name"] == original_name:
-                r["name"] = new_folder_name
-                r["case_number"] = request.form.get("case_number", "").strip()
-                r["crime"] = request.form.get("crime", "").strip()
-                r["danger_level"] = request.form.get("danger_level", "LOW").strip()
-        write_records(records)
-        enroll_faces(FACE_APP)
+        case_number = request.form.get("case_number", "").strip()
+        crime = request.form.get("crime", "").strip()
+        danger_level = request.form.get("danger_level", "LOW").strip()
+        
+        update_person(original_name, new_folder_name, case_number, crime, danger_level)
         return jsonify({"status": "success"})
 
     elif action == "delete":
         original_name = request.form.get("original_name")
-        records = [r for r in records if r["name"] != original_name]
-        write_records(records)
+        
+        delete_person_by_name(original_name)
         
         import shutil
         import stat
@@ -398,7 +402,6 @@ def api_watchlist():
                 except Exception:
                     pass
             
-        enroll_faces(FACE_APP)
         return jsonify({"status": "success"})
         
     return jsonify({"error": "Invalid action"}), 400
@@ -457,4 +460,4 @@ def serve_spa(path):
     return send_from_directory(app.static_folder, "index.html")
 
 if __name__ == "__main__":
-    app.run(debug=False, port=5000)
+    socketio.run(app, debug=False, port=5000, allow_unsafe_werkzeug=True)

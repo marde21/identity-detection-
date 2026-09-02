@@ -15,6 +15,7 @@ import requests
 from insightface.app import FaceAnalysis
 
 import config
+from database import get_db
 
 
 def load_watchlist():
@@ -118,7 +119,7 @@ def send_email_alert(name, similarity, timestamp_str, photo_path, case_info):
         print(f"  [email] Error: {e}")
 
 
-def trigger_alert(name, similarity, frame, box, last_alert_time, case_info=None):
+def trigger_alert(name, similarity, frame, box, last_alert_time, case_info=None, camera_id=None, watchlist_id=None):
     if case_info is None:
         case_info = {"case_number": "N/A", "crime": "N/A", "danger_level": "N/A"}
 
@@ -150,6 +151,15 @@ def trigger_alert(name, similarity, frame, box, last_alert_time, case_info=None)
     print(f"Snapshot saved: {filename}")
 
     log_alert_csv(person_dir, name, similarity, timestamp_str, filename, case_info)
+    
+    if watchlist_id and camera_id is not None:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('''INSERT INTO alert_logs (watchlist_id, camera_id, confidence, photo_path)
+                     VALUES (?, ?, ?, ?)''', (watchlist_id, camera_id, similarity, filename))
+        conn.commit()
+        conn.close()
+        
     send_telegram_alert(name, similarity, timestamp_str, filename, case_info)
     send_email_alert(name, similarity, timestamp_str, filename, case_info)
 
