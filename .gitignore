@@ -6,3 +6,5 @@ backend/alerts/
 backend/uploads/
 backend/identification_results/
 alerts/
+
+backend/watchlist.pkl
